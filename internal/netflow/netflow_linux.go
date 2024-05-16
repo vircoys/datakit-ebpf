@@ -10,7 +10,7 @@ import (
 
 	manager "github.com/DataDog/ebpf-manager"
 	"github.com/GuanceCloud/cliutils/point"
-	dkout "github.com/GuanceCloud/datakit-ebpf/internal/output"
+	"github.com/GuanceCloud/datakit-ebpf/internal/exporter"
 	"github.com/GuanceCloud/datakit-ebpf/internal/tracing"
 	"github.com/cilium/ebpf"
 	"github.com/shirou/gopsutil/host"
@@ -252,7 +252,7 @@ func (tracer *NetFlowTracer) connCollectHanllder(ctx context.Context, connStatsM
 
 // Receive all connections collected in one cycle and send them to DataKit.
 func (tracer *NetFlowTracer) feedHandler(datakitPostURL string, pts []*point.Point, gzip bool) {
-	if err := dkout.FeedPoint(datakitPostURL, pts, gzip); err != nil {
+	if err := exporter.FeedPoint(datakitPostURL, pts, gzip); err != nil {
 		l.Debug(err)
 	}
 }

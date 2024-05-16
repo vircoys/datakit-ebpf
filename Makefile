@@ -1,3 +1,5 @@
+.PHONY: all clean cleancache
+
 ARCH ?= $(shell uname -m | sed -e s/x86_64/x86_64/ \
 				  -e s/aarch64.\*/arm64/)
 
@@ -14,6 +16,11 @@ ifeq ($(MACHINE_ARCH),amd64)
         MACHINE_ARCH := x86
 		GO_ARCH := amd64
 endif
+
+DKE_ARCH    := linux/$(GO_ARCH)
+DKE_VERSION := $(shell git describe --tags)
+DKE_COMMIT  := $(shell git rev-parse --short HEAD)
+DKE_DATE    := $(shell date -u +'%Y-%m-%dT%H:%M:%SZ')
 
 ARGS ?= ""
 
@@ -59,13 +66,16 @@ BUILD_TAGS := -D__KERNEL__ -D__BPF_TRACING__ $(ARGS) \
 
 all: build
 
-httpflow.o: 
+cleancache:
+	go clean -cache github.com/GuanceCloud/datakit-ebpf/ebpf
+
+apiflow.o: 
 	clang $(BPF_INCLUDE) $(BUILD_TAGS) \
 		-DKBUILD_MODNAME=\"datatkit-ebpf\" \
-		-c $(INTERNAL_PATH)/c/apiflow/httpflow.c \
-		-o - | llc -march=bpf -filetype=obj -o $(EBPF_BIN_PATH)/httpflow.o
+		-c $(INTERNAL_PATH)/c/apiflow/apiflow.c \
+		-o - | llc -march=bpf -filetype=obj -o $(EBPF_BIN_PATH)/apiflow.o
 
-netflow.o: httpflow.o
+netflow.o:
 	clang $(BPF_INCLUDE) $(BUILD_TAGS) \
 		-DKBUILD_MODNAME=\"datatkit-ebpf\" \
 		-c $(INTERNAL_PATH)/c/netflow/netflow.c \
@@ -113,17 +123,13 @@ bash_history.o:
 		-o - | llc -march=bpf -filetype=obj -o $(EBPF_BIN_PATH)/bash_history.o
 
 bindata: offset_guess.o offset_httpflow.o offset_conntrack.o offset_tcp_seq.o \
-			netflow.o bash_history.o conntrack.o process_sched.o
-	llvm-strip $(EBPF_BIN_PATH)/*.o --no-strip-all -R .BTF  
-	llvm-strip $(EBPF_BIN_PATH)/*.o --no-strip-all -R .BTF.ext 
-	llvm-strip $(EBPF_BIN_PATH)/*.o --no-strip-all -R .rel.BTF
-	llvm-strip $(EBPF_BIN_PATH)/*.o --no-strip-all -R .rel.BTF.ext
+			netflow.o apiflow.o bash_history.o conntrack.o process_sched.o
+	llvm-strip $(EBPF_BIN_PATH)/*.o --no-strip-all -R .BTF
 
 build: bindata
-	go build -tags="ebpf" -o $(OUT_PATH) $(SRC_PATH)/datakit-ebpf.go 
-	# go build -tags="ebpf" -ldflags "-w -s" -o $(OUT_PATH) $(SRC_PATH)/datakit-ebpf.go 
-
-
+	go build -tags="ebpf" -ldflags "-w -s \
+		-X 'main.Arch=${DKE_ARCH}' \
+        -X 'main.Date=${DKE_DATE}'" -o $(OUT_PATH) $(SRC_PATH)/cmd/datakit-ebpf/datakit-ebpf.go
 
 clean:
 	rm -r $(OUT_PATH)
