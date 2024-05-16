@@ -103,7 +103,7 @@ func (c *K8sClient) GetEndpointNet(ns string) (map[string]*K8sEndpointsNet, erro
 					ep.IPPort[v.IP] = append(ep.IPPort[v.IP],
 						Port{
 							Port:     uint32(p.Port),
-							Protocol: string(p.Protocol),
+							Protocol: strings.ToLower(string(p.Protocol)),
 						},
 					)
 				}
@@ -297,4 +297,44 @@ func MatchLabel(selector, labels map[string]string) bool {
 	}
 
 	return true
+}
+
+func NewK8sInfo(k8sURL, bearerToken, bearerTokenPath string) (*K8sNetInfo, error) {
+	if k8sURL == "" {
+		k8sURL = "https://kubernetes.default:443"
+	}
+
+	// net.LookupHost()
+
+	if bearerTokenPath == "" && bearerToken == "" {
+		//nolint:gosec
+		bearerTokenPath = "/run/secrets/kubernetes.io/serviceaccount/token"
+	}
+
+	var cli *K8sClient
+	var err error
+	if bearerTokenPath != "" {
+		cli, err = NewK8sClientFromBearerToken(k8sURL,
+			bearerTokenPath)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		cli, err = NewK8sClientFromBearerTokenString(k8sURL,
+			bearerToken)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cli == nil {
+		return nil, fmt.Errorf("new k8s client")
+	}
+
+	kinfo, err := NewK8sNetInfo(cli)
+	if err != nil {
+		return nil, err
+	}
+
+	return kinfo, err
 }

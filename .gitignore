@@ -1,4 +1,7 @@
 .vscode/
-**/dist/**
+dist/
 bin/
+demo/
+
 *.o
+
